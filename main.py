@@ -29,7 +29,7 @@ def get_main_keyboard():
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
-        "Приветствую!",
+        "Приветствую!напиши свой силовой вопрос и я как смогу сразу отвечу тебе Брух)!",
         reply_markup=get_main_keyboard()
     )
 
