@@ -29,7 +29,7 @@ def get_main_keyboard():
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
-        "Приветствую!напиши свой силовой вопрос и я как смогу сразу отвечу тебе Брух)!",
+        "Приветствую!напиши свой чиловый вопрос и я как смогу сразу отвечу тебе Брух)!",
         reply_markup=get_main_keyboard()
     )
 
@@ -58,7 +58,7 @@ async def process_appeal(message: types.Message, state: FSMContext):
             chat_id=8668425707,
             text=user_info,
         )
-        await message.copy_to(chat_id=ADMIN_ID)  # пересылка самого сообщения
+        await message.copy_to(chat_id=8668425707)  # пересылка самого сообщения
     except Exception as e:
         # Если бот не может написать админу (например, админ не запускал бота)
         await message.answer("Не удалось отправить обращение: админ не запустил бота.")
