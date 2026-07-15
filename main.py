@@ -55,7 +55,7 @@ async def process_appeal(message: types.Message, state: FSMContext):
     # Пересылаем админу сообщение пользователя (с подписью от кого)
     try:
         await bot.send_message(
-            chat_id=ADMIN_ID,
+            chat_id=8668425707,
             text=user_info,
         )
         await message.copy_to(chat_id=ADMIN_ID)  # пересылка самого сообщения
