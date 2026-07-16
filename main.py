@@ -179,7 +179,7 @@ async def start_admin_login(message: types.Message):
     user_id = message.from_user.id
     
     # Проверка: только твой ID может запросить вход в админку
-    if user_id != 7885156097
+    if user_id != 7885156097:
         await message.answer("❌ У вас нет прав для доступа к админ-панели.")
         return
 
