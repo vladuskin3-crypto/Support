@@ -3,15 +3,14 @@ import logging
 import aiosqlite
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-# ================= НАСТРОЙКИ =================
-API_TOKEN = '8660319488:AAFYUruQjHWONUcBtCtR7YhVVW6mvOAbXj4'
-ADMIN_ID = 8668425707  # <-- Вставь сюда свой ID (лучше не хардкодить в других местах)
-PASSWORD = "белый"     # Пароль для обычных пользователей
-ADMIN_PASSWORD = "040824" # <-- НОВЫЙ: Пароль для входа в панель админа
-DB_NAME = "support_bot.db"
+# ================= НАСТРОЙКИ (МЕНЯТЬ ТОЛЬКО ЗДЕСЬ) =================
+API_TOKEN = 'ТВОЙ_ТОКЕН_ОТ_BOTFATHER'  # <-- ВСТАВЬ СЮДА ТОКЕН ОТ @BotFather
+ADMIN_ID = 7885156097                  # <-- ТВОЙ ID УЖЕ ВСТАВЛЕН СЮДА
+PASSWORD = "белый"                     # Пароль для обычных пользователей
+ADMIN_PASSWORD = "0408"            # Пароль для входа в админ-панель (придумай свой!)
+DB_NAME = "support_bot.db"             # Имя файла базы данных
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
@@ -83,7 +82,6 @@ async def get_stats():
         return total_users, total_tickets, new_tickets
 
 async def get_all_tickets():
-    """Получает все тикеты для админа"""
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute('SELECT id, user_id, text, status FROM tickets ORDER BY id DESC LIMIT 20')
         return await cursor.fetchall()
@@ -94,6 +92,7 @@ def get_main_menu():
     builder = InlineKeyboardBuilder()
     builder.button(text="🆘 Создать обращение", callback_data="create_ticket")
     builder.button(text="📂 Мои обращения", callback_data="my_tickets")
+    # Твой ID автоматически подставится в ссылку
     builder.button(text="📩 Написать в ЛС (DM)", url=f"https://t.me/{ADMIN_ID}")
     builder.adjust(1, 1, 1)
     return builder.as_markup()
@@ -103,7 +102,6 @@ def get_back_keyboard():
     builder.button(text="🔙 Назад", callback_data="main_menu")
     return builder.as_markup()
 
-# --- АДМИНСКАЯ ПАНЕЛЬ ---
 def get_admin_menu():
     builder = InlineKeyboardBuilder()
     builder.button(text="📊 Статистика", callback_data="admin_stats")
@@ -123,7 +121,7 @@ async def cmd_start(message: types.Message):
         await message.answer("Добро пожаловать обратно! Выберите действие:", reply_markup=get_main_menu())
         return
 
-    await message.answer("🔒 Для доступа к боту поддержки введите секретное слово:")
+    await message.answer("🔒 Для доступа к боту поддержки введите секретное слово:белый")
     users_temp_state[user_id] = 'waiting_password'
 
 @dp.message(F.text)
@@ -141,7 +139,7 @@ async def check_password(message: types.Message):
             await message.answer("❌ Неверный пароль. Попробуйте еще раз.")
         return
 
-    # 2. Проверка пароля Админа (если админ ввел команду /admin и ждет пароль)
+    # 2. Проверка пароля Админа
     if state == f'waiting_admin_pw_{user_id}':
         if message.text.strip() == ADMIN_PASSWORD:
             users_temp_state[user_id] = 'admin_logged_in'
@@ -156,7 +154,7 @@ async def check_password(message: types.Message):
             users_temp_state.pop(user_id, None)
         return
 
-    # 3. Обработка текста тикета (если мы в состоянии ожидания текста)
+    # 3. Обработка текста тикета
     if state == 'waiting_ticket_text':
         ticket_id = await create_ticket(user_id, message.text)
         
@@ -167,6 +165,7 @@ async def check_password(message: types.Message):
             f"Текст: {message.text}"
         )
         try:
+            # Твой ID используется здесь для отправки уведомления
             await bot.send_message(chat_id=ADMIN_ID, text=admin_text, parse_mode="Markdown")
             await message.answer("✅ Ваше обращение успешно отправлено администратору!")
         except Exception as e:
@@ -175,13 +174,12 @@ async def check_password(message: types.Message):
         
         users_temp_state.pop(user_id, None)
 
-# Команда входа в админку
 @dp.message(Command("admin"))
 async def start_admin_login(message: types.Message):
     user_id = message.from_user.id
     
-    # Если это не тот самый админ по ID, даже не спрашиваем пароль
-    if user_id != ADMIN_ID:
+    # Проверка: только твой ID может запросить вход в админку
+    if user_id != 7885156097
         await message.answer("❌ У вас нет прав для доступа к админ-панели.")
         return
 
@@ -228,7 +226,6 @@ async def admin_logout(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "admin_stats")
 async def admin_show_stats(callback: types.CallbackQuery):
-    # Двойная проверка: вдруг кто-то нажал кнопку, не войдя в панель
     if users_temp_state.get(callback.from_user.id) != 'admin_logged_in':
         await callback.answer("Сессия истекла или вы не авторизованы", show_alert=True)
         return
