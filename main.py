@@ -30,7 +30,7 @@ def get_main_menu():
     builder = InlineKeyboardBuilder()
     builder.button(text="🆘 Создать обращение", callback_data="create_ticket")
     builder.button(text="📂 Мои обращения", callback_data="my_tickets")
-    builder.button(text="📩 Написать в ЛС (DM)", url=f"https://t.me/{ADMIN_ID}") # Ссылка на админа
+    builder.button(text="📩 Написать в ЛС (DM)", url=f"https://t.me/belovP2P") # Ссылка на админа
     builder.adjust(1, 1, 1)
     return builder.as_markup()
 
