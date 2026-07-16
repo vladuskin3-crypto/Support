@@ -93,7 +93,7 @@ def get_main_menu():
     builder.button(text="🆘 Создать обращение", callback_data="create_ticket")
     builder.button(text="📂 Мои обращения", callback_data="my_tickets")
     # Твой ID автоматически подставится в ссылку
-    builder.button(text="📩 Написать в ЛС (DM)", url=f"https://t.me/{ADMIN_ID}")
+    builder.button(text="📩 Написать в ЛС (DM)", url=f"t.me/belovP2P")
     builder.adjust(1, 1, 1)
     return builder.as_markup()
 
