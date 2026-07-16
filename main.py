@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # ================= НАСТРОЙКИ (МЕНЯТЬ ТОЛЬКО ЗДЕСЬ) =================
-API_TOKEN = 'ТВОЙ_ТОКЕН_ОТ_BOTFATHER'  # <-- ВСТАВЬ СЮДА ТОКЕН ОТ @BotFather
+API_TOKEN = '8660319488:AAFYUruQjHWONUcBtCtR7YhVVW6mvOAbXj4'  # <-- ВСТАВЬ СЮДА ТОКЕН ОТ @BotFather
 ADMIN_ID = 7885156097                  # <-- ТВОЙ ID УЖЕ ВСТАВЛЕН СЮДА
 PASSWORD = "белый"                     # Пароль для обычных пользователей
 ADMIN_PASSWORD = "0408"            # Пароль для входа в админ-панель (придумай свой!)
