@@ -7,21 +7,23 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # ================= НАСТРОЙКИ =================
-API_TOKEN = '8660319488:AAFYUruQjHWONUcBtCtR7YhVVW6mvOAbXj4' 
-ADMIN_ID = 8668425707  # <-- ВСТАВЬ СВОЙ ID
-PASSWORD = "белый"
+API_TOKEN = '8660319488:AAFYUruQjHWONUcBtCtR7YhVVW6mvOAbXj4'
+ADMIN_ID = 8668425707  # <-- Вставь сюда свой ID (лучше не хардкодить в других местах)
+PASSWORD = "белый"     # Пароль для обычных пользователей
+ADMIN_PASSWORD = "040824" # <-- НОВЫЙ: Пароль для входа в панель админа
 DB_NAME = "support_bot.db"
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
-# ================= РАБОТА С БАЗОЙ ДАННЫХ (Асинхронно) =================
+# Хранилище временных состояний (кто что сейчас делает)
+users_temp_state = {} 
+
+# ================= РАБОТА С БАЗОЙ ДАННЫХ =================
 
 async def init_db():
-    """Создает таблицы, если их нет"""
     async with aiosqlite.connect(DB_NAME) as db:
-        # Таблица пользователей (кто прошел пароль)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
@@ -30,7 +32,6 @@ async def init_db():
                 status TEXT DEFAULT 'pending'
             )
         ''')
-        # Таблица обращений (тикеты)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS tickets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +61,6 @@ async def create_ticket(user_id, text):
         await db.execute('INSERT INTO tickets (user_id, text, status) VALUES (?, ?, ?)',
                          (user_id, text, 'new'))
         await db.commit()
-        # Получаем ID последнего созданного тикета
         cursor = await db.execute('SELECT last_insert_rowid()')
         last_id = await cursor.fetchone()
         return last_id[0]
@@ -72,11 +72,9 @@ async def get_user_tickets(user_id):
 
 async def get_stats():
     async with aiosqlite.connect(DB_NAME) as db:
-        # Кол-во пользователей
         cursor_u = await db.execute('SELECT COUNT(*) FROM users')
         total_users = (await cursor_u.fetchone())[0]
         
-        # Кол-во тикетов
         cursor_t = await db.execute('SELECT COUNT(*), SUM(CASE WHEN status = "new" THEN 1 ELSE 0 END) FROM tickets')
         res = await cursor_t.fetchone()
         total_tickets = res[0] or 0
@@ -84,18 +82,34 @@ async def get_stats():
         
         return total_users, total_tickets, new_tickets
 
+async def get_all_tickets():
+    """Получает все тикеты для админа"""
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('SELECT id, user_id, text, status FROM tickets ORDER BY id DESC LIMIT 20')
+        return await cursor.fetchall()
+
 # ================= КЛАВИАТУРЫ =================
+
 def get_main_menu():
     builder = InlineKeyboardBuilder()
     builder.button(text="🆘 Создать обращение", callback_data="create_ticket")
     builder.button(text="📂 Мои обращения", callback_data="my_tickets")
-    builder.button(text="📩 Написать в ЛС (DM)", url=f"t.me/belovP2P")
+    builder.button(text="📩 Написать в ЛС (DM)", url=f"https://t.me/{ADMIN_ID}")
     builder.adjust(1, 1, 1)
     return builder.as_markup()
 
 def get_back_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="🔙 Назад", callback_data="main_menu")
+    return builder.as_markup()
+
+# --- АДМИНСКАЯ ПАНЕЛЬ ---
+def get_admin_menu():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📊 Статистика", callback_data="admin_stats")
+    builder.button(text="🎫 Все тикеты", callback_data="admin_all_tickets")
+    builder.button(text="🚪 Выйти из панели", callback_data="admin_logout")
+    builder.adjust(2, 1)
     return builder.as_markup()
 
 # ================= ЛОГИКА БОТА =================
@@ -109,8 +123,7 @@ async def cmd_start(message: types.Message):
         await message.answer("Добро пожаловать обратно! Выберите действие:", reply_markup=get_main_menu())
         return
 
-    await message.answer("🔒 Для доступа к боту поддержки введите секретное слово:белый")
-    # Сохраняем временное состояние в памяти (для простоты), можно тоже в БД
+    await message.answer("🔒 Для доступа к боту поддержки введите секретное слово:")
     users_temp_state[user_id] = 'waiting_password'
 
 @dp.message(F.text)
@@ -118,6 +131,7 @@ async def check_password(message: types.Message):
     user_id = message.from_user.id
     state = users_temp_state.get(user_id)
     
+    # 1. Проверка пароля обычного пользователя
     if state == 'waiting_password':
         if message.text.strip().lower() == PASSWORD.lower():
             await add_user(user_id, message.from_user.username, message.from_user.full_name)
@@ -126,14 +140,24 @@ async def check_password(message: types.Message):
         else:
             await message.answer("❌ Неверный пароль. Попробуйте еще раз.")
         return
-    
-    # Если пользователь уже авторизован, но просто пишет текст без команды - игнорируем,
-    # так как создание тикета запускается через кнопку.
-    if state != 'waiting_ticket_text':
+
+    # 2. Проверка пароля Админа (если админ ввел команду /admin и ждет пароль)
+    if state == f'waiting_admin_pw_{user_id}':
+        if message.text.strip() == ADMIN_PASSWORD:
+            users_temp_state[user_id] = 'admin_logged_in'
+            await message.answer(
+                f"🛡️ **Панель администратора активирована!**\n\n"
+                f"Выберите действие:",
+                parse_mode="Markdown",
+                reply_markup=get_admin_menu()
+            )
+        else:
+            await message.answer("❌ Неверный пароль администратора. Доступ запрещен.")
+            users_temp_state.pop(user_id, None)
         return
 
-    # Обработка текста тикета (если мы в состоянии ожидания текста)
-    if users_temp_state.get(user_id) == 'waiting_ticket_text':
+    # 3. Обработка текста тикета (если мы в состоянии ожидания текста)
+    if state == 'waiting_ticket_text':
         ticket_id = await create_ticket(user_id, message.text)
         
         admin_text = (
@@ -143,7 +167,7 @@ async def check_password(message: types.Message):
             f"Текст: {message.text}"
         )
         try:
-            await bot.send_message(chat_id=8668425707, text=admin_text, parse_mode="Markdown")
+            await bot.send_message(chat_id=ADMIN_ID, text=admin_text, parse_mode="Markdown")
             await message.answer("✅ Ваше обращение успешно отправлено администратору!")
         except Exception as e:
             logging.error(e)
@@ -151,8 +175,18 @@ async def check_password(message: types.Message):
         
         users_temp_state.pop(user_id, None)
 
-# Глобальное хранилище временных состояний (кто что сейчас делает)
-users_temp_state = {}
+# Команда входа в админку
+@dp.message(Command("admin"))
+async def start_admin_login(message: types.Message):
+    user_id = message.from_user.id
+    
+    # Если это не тот самый админ по ID, даже не спрашиваем пароль
+    if user_id != ADMIN_ID:
+        await message.answer("❌ У вас нет прав для доступа к админ-панели.")
+        return
+
+    await message.answer(f"🔐 Введите пароль администратора ({ADMIN_PASSWORD}):")
+    users_temp_state[user_id] = f'waiting_admin_pw_{user_id}'
 
 @dp.callback_query(F.data == "main_menu")
 async def back_to_main(callback: types.CallbackQuery):
@@ -185,11 +219,20 @@ async def show_my_tickets(callback: types.CallbackQuery):
     
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_back_keyboard())
 
-@dp.message(Command("stats"))
-async def admin_stats(message: types.Message):
-    if message.from_user.id != 8668425707:
+# --- ОБРАБОТЧИКИ АДМИН-ПАНЕЛИ ---
+
+@dp.callback_query(F.data == "admin_logout")
+async def admin_logout(callback: types.CallbackQuery):
+    users_temp_state.pop(callback.from_user.id, None)
+    await callback.message.edit_text("🚪 Вы вышли из панели администратора.", reply_markup=get_main_menu())
+
+@dp.callback_query(F.data == "admin_stats")
+async def admin_show_stats(callback: types.CallbackQuery):
+    # Двойная проверка: вдруг кто-то нажал кнопку, не войдя в панель
+    if users_temp_state.get(callback.from_user.id) != 'admin_logged_in':
+        await callback.answer("Сессия истекла или вы не авторизованы", show_alert=True)
         return
-    
+
     total_users, total_tickets, new_tickets = await get_stats()
     
     text = (
@@ -198,10 +241,29 @@ async def admin_stats(message: types.Message):
         f"🎫 Всего обращений: {total_tickets}\n"
         f"❗ Новых обращений: {new_tickets}"
     )
-    await message.answer(text, parse_mode="Markdown")
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_admin_menu())
+
+@dp.callback_query(F.data == "admin_all_tickets")
+async def admin_show_all_tickets(callback: types.CallbackQuery):
+    if users_temp_state.get(callback.from_user.id) != 'admin_logged_in':
+        await callback.answer("Сессия истекла", show_alert=True)
+        return
+
+    all_tickets = await get_all_tickets()
+    
+    if not all_tickets:
+        await callback.message.edit_text("Нет обращений.", reply_markup=get_admin_menu())
+        return
+
+    text = "🎫 **Все обращения (последние 20):**\n\n"
+    for tid, uid, t_text, t_status in all_tickets:
+        status_emoji = "📩" if t_status == 'new' else "✅"
+        text += f"{status_emoji} #{tid} (User {uid}): {t_text[:30]}...\n"
+    
+    await callback.message.edit_text(text, reply_markup=get_admin_menu())
 
 async def main():
-    await init_db()  # Инициализируем БД при старте
+    await init_db()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
